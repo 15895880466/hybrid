@@ -21,7 +21,9 @@
     > Android通过 WebChromeClient 的onJsAlert()、onJsConfirm()、onJsPrompt（）方法回调分别拦截JS对话框 （即上述三个方法），得到他们的消息内容，然后解析即可。对比三个方法我们可以发现只有prompt（）可以返回任意类型的值，操作最全面方便、更加灵活；而alert（）对话框没有返回值；confirm（）对话框只能返回两种状态（确定 / 取消）两个值，因此promt()方法较为合适
   * 总结  
     对比三种方式如下图
+    
     ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-8c91481325a5253e.png）
+    
     可以发现，利用WebChromeClient的onJsPrompt（）方法拦截js侧的promt()，这种方式最合理
   ### Native主动调用Js
   * 通过WebView的loadUrl（）,及我们熟知的js注入
@@ -46,8 +48,11 @@
       缺点：1. 要求Android4.4以上
            2. onReceiveValue(String value)，value会多一对引号，需要特殊处理
   * 总结
+  
     ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-30f095d4c9e638fd.png）
+    
   ### 总体对比
+  
     ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-613b57c93dff2eb8.png）
 
   
