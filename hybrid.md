@@ -32,13 +32,18 @@
     > 优点：对Api无要求，不存在安全漏洞，较为通用
       缺点：对注入代码长度有限制，且该方法执行会使页面刷新，并且无返回值
   * 通过WebView的evaluateJavascript（）
-    ·mWebView.evaluateJavascript（"javascript:callJS()", new ValueCallback<String>() {
+    ```
+    mWebView.evaluateJavascript（"javascript:callJS()", new ValueCallback<String>() {
         @Override
         public void onReceiveValue(String value) {
             //此处为 js 返回的结果
           }
         });
       }
-      ·
+    ```
+    > 优点：1. 该方法的执行不会使页面刷新。
+           2. 有返回值，效率更高、使用更简洁。
+      缺点：1. 要求Android4.4以上
+           2. onReceiveValue(String value)，value会多一对引号，需要特殊处理
 
   
