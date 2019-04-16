@@ -32,13 +32,13 @@
     > 优点：对Api无要求，不存在安全漏洞，较为通用
       缺点：对注入代码长度有限制，且该方法执行会使页面刷新，并且无返回值
   * 通过WebView的evaluateJavascript（）
-    ···mWebView.evaluateJavascript（"javascript:callJS()", new ValueCallback<String>() {
+    ·mWebView.evaluateJavascript（"javascript:callJS()", new ValueCallback<String>() {
         @Override
         public void onReceiveValue(String value) {
             //此处为 js 返回的结果
           }
         });
       }
-      ···
+      ·
 
   
