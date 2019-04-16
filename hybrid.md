@@ -22,7 +22,7 @@
   * 总结  
     对比三种方式如下图
     
-    ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-8c91481325a5253e.png）
+    ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-8c91481325a5253e.png)
     
     可以发现，利用WebChromeClient的onJsPrompt（）方法拦截js侧的promt()，这种方式最合理
   ### Native主动调用Js
@@ -48,11 +48,13 @@
       缺点：1. 要求Android4.4以上
            2. onReceiveValue(String value)，value会多一对引号，需要特殊处理
   * 总结
-  
-    ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-30f095d4c9e638fd.png）
+    ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-30f095d4c9e638fd.png)
     
   ### 总体对比
+  * 对比图
+    ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-613b57c93dff2eb8.png)
+    
   
-    ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-613b57c93dff2eb8.png）
+    
 
   
