@@ -53,8 +53,188 @@
   ### 总体对比
   * 对比图
     ![avatar](https://github.com/15895880466/hybrid/blob/master/image/944365-613b57c93dff2eb8.png)
-    
   
+  ## JsBridge原理介绍
+        Android侧JsBridge一般指 [JsBridge](https://github.com/lzyzsd/JsBridge)，该框架对应ios侧的
+    [WebViewJavascriptBridge](https://github.com/marcuswestin/WebViewJavascriptBridge),两者的实现细节各有不同，但是总体原理一致。我们主要看一下其Js与Native通信原理的实现，对于具体的代码细节不做深究。
+   ### JsBridge集成
+    * Js端
+    > 集成源码中的js文件，WebViewJavascriptBridge.js，注意此处不可以通过注入的方式实现，不要被各种讲解博客误导。
+    * Android侧
+    ```
+    dependencies {
+      compile 'com.github.lzyzsd:jsbridge:1.0.4'
+      }
+    ```
+   ### Js调用Native
+    步骤
+      1. js侧
+         ```
+       //message：传递信息, responseCallback：回调
+       function _doSend(message, responseCallback) {
+            if (responseCallback) {
+                //生成唯一callbackid用于标识该次jsbridge通信过程
+                var callbackId = 'cb_' + (uniqueId++) + '_' + new Date().getTime();
+                responseCallbacks[callbackId] = responseCallback;
+                message.callbackId = callbackId;
+             }
+             sendMessageQueue.push(message);
+             //src："yy://__QUEUE_MESSAGE__/"
+             messagingIframe.src = CUSTOM_PROTOCOL_SCHEME + '://' + QUEUE_HAS_MESSAGE;
+           }
+         ```
+      2.native侧
+         ```
+    @Override
+    public boolean shouldOverrideUrlLoading(WebView view, String url) {
+        try {
+            url = URLDecoder.decode(url, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+        if (url.startsWith(BridgeUtil.YY_RETURN_DATA)) { // 如果是返回数据
+            webView.handlerReturnData(url);
+            return true;
+        } else if (url.startsWith(BridgeUtil.YY_OVERRIDE_SCHEMA)) { //
+            webView.flushMessageQueue();
+            return true;
+        } else {
+            return super.shouldOverrideUrlLoading(view, url);
+        }
+    }
+         ```
+         这里会走第二个if, 调用BridgeWebView的flushMessageQueue()方法
+         ```
+         /**
+     * 刷新消息队列
+     */
+    void flushMessageQueue() {
+        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
+            loadUrl(BridgeUtil.JS_FETCH_QUEUE_FROM_JAVA, new CallBackFunction() {
+
+                @Override
+                public void onCallBack(String data) {
+                    ...
+                }
+            });
+        }
+    }
+         ```
+         在这个flushMessageQueue方法里, 如果当前是主线程就调用一个loadUrl方法
+         ```
+         public void loadUrl(String jsUrl, CallBackFunction returnCallback) {
+        // jsUrl = "javascript:WebViewJavascriptBridge._fetchQueue();"
+        this.loadUrl(jsUrl);
+        // 添加至 Map<String, CallBackFunction>
+        String functionName = BridgeUtil.parseFunctionName(jsUrl);
+        // functionName = "_fetchQueue"
+        responseCallbacks.put(functionName, returnCallback);
+    }
+         ```
+         在这个方法里, 首先会调用WebViewJavascriptBridge的_fetchQueue()方法, 然后解析方法名字, 因为这里的方法名字是写死的, 其实就是_fetchQueue, 请记住这个名字, 因为后面会用到.然后将以这个_fetchQueue为key, 回调方法为value, 放到一个map里面.然后我们再去看js那端的方法.
+
+      3.js侧
+         ```
+         // 提供给native调用,该函数作用:获取sendMessageQueue返回给native,由于android不能直接获取返回的内容,所以使用url shouldOverrideUrlLoading 的方式返回内容
+    function _fetchQueue() {
+        var messageQueueString = JSON.stringify(sendMessageQueue);
+        console.log('messageQueueString = ' + messageQueueString);
+        sendMessageQueue = [];
+        // android can't read directly the return data, so we can reload iframe src to communicate with java
+        var src = CUSTOM_PROTOCOL_SCHEME + '://return/_fetchQueue/' + encodeURIComponent(messageQueueString);
+        messagingIframe.src = src;
+    }
+         ```
+        sendMessageQueue这个数组我们在_doSend()方法中用到过, 里面push了一个message对象, json格式化之后字符串就是[{"handlerName":"xx","data":"xxx","callbackId":"cb_2_1532852750705"}]这样的, 然后将sendMessageQueue这个数组置空, 接着再次变更iframe的src属性, 触发java的shouldOverrideUrlLoading方法, 传递的url是类似yy://return/_fetchQueue/%5B%7B%22handlerName%22%3A%22takePhoto%22%2C%22data%22%3A1234%2C%22callbackId%22%3A%22cb_1_1532853343154%22%7D%5D这样的,现在又回到java端的方法了。
+    4.native侧
+        触发shouldOverrideUrlLoading方法，并走第一个if，触发handlerReturnData方法
+        ```
+        void handlerReturnData(String url) {
+        // _fetchQueue
+        String functionName = BridgeUtil.getFunctionFromReturnUrl(url);
+        //取出flushMessageQueue方法中放入responseCallbacks队列中的callback 
+        CallBackFunction f = responseCallbacks.get(functionName);
+        //取出js侧传来的数据
+        String data = BridgeUtil.getDataFromReturnUrl(url);
+        if (f != null) {
+            //执行callback
+            f.onCallBack(data);
+            responseCallbacks.remove(functionName);
+            return;
+        }
+    }
+        ```
+        在看一下这个callback
+        
+        ```
+         void flushMessageQueue() {
+        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
+            loadUrl(BridgeUtil.JS_FETCH_QUEUE_FROM_JAVA, new CallBackFunction() {
+
+                @Override
+                public void onCallBack(String data) {
+                    // deserializeMessage 反序列化消息
+                    List<Message> list = null;
+                    try {
+                        list = Message.toArrayList(data);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return;
+                    }
+                    if (list == null || list.size() == 0) {
+                        return;
+                    }
+                    for (int i = 0; i < list.size(); i++) {
+                        Message m = list.get(i);
+                        String responseId = m.getResponseId();
+                        // 是否是response  CallBackFunction
+                        if (!TextUtils.isEmpty(responseId)) {
+                            CallBackFunction function = responseCallbacks.get(responseId);
+                            String responseData = m.getResponseData();
+                            function.onCallBack(responseData);
+                            responseCallbacks.remove(responseId);
+                        } else {
+                            CallBackFunction responseFunction = null;
+                            // if had callbackId 如果有回调Id
+                            final String callbackId = m.getCallbackId();
+                            if (!TextUtils.isEmpty(callbackId)) {
+                                responseFunction = new CallBackFunction() {
+                                    @Override
+                                    public void onCallBack(String data) {
+                                        Message responseMsg = new Message();
+                                        responseMsg.setResponseId(callbackId);
+                                        responseMsg.setResponseData(data);
+                                        queueMessage(responseMsg);
+                                    }
+                                };
+                            } else {
+                                responseFunction = new CallBackFunction() {
+                                    @Override
+                                    public void onCallBack(String data) {
+                                        // do nothing
+                                    }
+                                };
+                            }
+                            // BridgeHandler执行
+                            BridgeHandler handler;
+                            if (!TextUtils.isEmpty(m.getHandlerName())) {
+                                handler = messageHandlers.get(m.getHandlerName());
+                            } else {
+                                handler = defaultHandler;
+                            }
+                            if (handler != null){
+                                handler.handler(m.getData(), responseFunction);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+        ```
+
+
     
 
   
